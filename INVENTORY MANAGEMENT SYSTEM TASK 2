@@ -1,0 +1,199 @@
+import sqlite3
+import tkinter as tk
+from tkinter import messagebox
+import datetime
+
+def setup_database():
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    
+    # Create tables
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username TEXT UNIQUE,
+        password TEXT
+    )
+    ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        category TEXT,
+        quantity INTEGER,
+        price REAL
+    )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+def register_user(username, password):
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+        conn.commit()
+        print(f"User '{username}' registered successfully.")
+    except sqlite3.IntegrityError:
+        print("Username already exists.")
+    conn.close()
+
+def authenticate_user(username, password):
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password))
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        print(f"User '{username}' authenticated successfully.")
+        return True
+    else:
+        print("Invalid username or password.")
+        return False
+
+def add_product(name, category, quantity, price):
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO products (name, category, quantity, price) VALUES (?, ?, ?, ?)', (name, category, quantity, price))
+    conn.commit()
+    conn.close()
+    print(f"Product '{name}' added successfully.")
+
+def edit_product(product_id, name, category, quantity, price):
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    cursor.execute('UPDATE products SET name = ?, category = ?, quantity = ?, price = ? WHERE id = ?', (name, category, quantity, price, product_id))
+    conn.commit()
+    conn.close()
+    print(f"Product '{name}' updated successfully.")
+
+def delete_product(product_id):
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM products WHERE id = ?', (product_id,))
+    conn.commit()
+    conn.close()
+    print(f"Product ID '{product_id}' deleted successfully.")
+
+def view_products():
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM products')
+    products = cursor.fetchall()
+    conn.close()
+    return products
+
+def low_stock_alert(threshold=10):
+    conn = sqlite3.connect('inventory.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM products WHERE quantity < ?', (threshold,))
+    low_stock_products = cursor.fetchall()
+    conn.close()
+    return low_stock_products
+
+class InventoryApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Inventory Management System")
+        self.username = tk.StringVar()
+        self.password = tk.StringVar()
+        
+        self.product_name = tk.StringVar()
+        self.product_category = tk.StringVar()
+        self.product_quantity = tk.IntVar()
+        self.product_price = tk.DoubleVar()
+        
+        self.create_login_screen()
+
+    def create_login_screen(self):
+        login_frame = tk.Frame(self.root)
+        login_frame.pack()
+
+        tk.Label(login_frame, text="Username").grid(row=0, column=0)
+        tk.Entry(login_frame, textvariable=self.username).grid(row=0, column=1)
+        
+        tk.Label(login_frame, text="Password").grid(row=1, column=0)
+        tk.Entry(login_frame, textvariable=self.password, show='*').grid(row=1, column=1)
+
+        tk.Button(login_frame, text="Login", command=self.login).grid(row=2, column=0, columnspan=2)
+        tk.Button(login_frame, text="Register", command=self.register).grid(row=3, column=0, columnspan=2)
+
+    def login(self):
+        if authenticate_user(self.username.get(), self.password.get()):
+            messagebox.showinfo("Login", "Login successful!")
+            self.create_inventory_screen()
+        else:
+            messagebox.showerror("Login", "Invalid username or password.")
+
+    def register(self):
+        register_user(self.username.get(), self.password.get())
+        messagebox.showinfo("Register", "User registered successfully.")
+
+    def create_inventory_screen(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        inventory_frame = tk.Frame(self.root)
+        inventory_frame.pack()
+
+        tk.Label(inventory_frame, text="Product Name").grid(row=0, column=0)
+        tk.Entry(inventory_frame, textvariable=self.product_name).grid(row=0, column=1)
+        
+        tk.Label(inventory_frame, text="Category").grid(row=1, column=0)
+        tk.Entry(inventory_frame, textvariable=self.product_category).grid(row=1, column=1)
+        
+        tk.Label(inventory_frame, text="Quantity").grid(row=2, column=0)
+        tk.Entry(inventory_frame, textvariable=self.product_quantity).grid(row=2, column=1)
+        
+        tk.Label(inventory_frame, text="Price").grid(row=3, column=0)
+        tk.Entry(inventory_frame, textvariable=self.product_price).grid(row=3, column=1)
+        
+        tk.Button(inventory_frame, text="Add Product", command=self.add_product).grid(row=4, column=0, columnspan=2)
+        tk.Button(inventory_frame, text="View Products", command=self.view_products).grid(row=5, column=0, columnspan=2)
+        tk.Button(inventory_frame, text="Low Stock Alert", command=self.low_stock_alert).grid(row=6, column=0, columnspan=2)
+
+    def add_product(self):
+        add_product(self.product_name.get(), self.product_category.get(), self.product_quantity.get(), self.product_price.get())
+        messagebox.showinfo("Add Product", "Product added successfully.")
+
+    def view_products(self):
+        products = view_products()
+        product_list = "\n".join([f"{p[1]} ({p[2]}) - {p[3]} units - ${p[4]}" for p in products])
+        messagebox.showinfo("Products", product_list)
+
+    def low_stock_alert(self):
+        low_stock_products = low_stock_alert()
+        low_stock_list = "\n".join([f"{p[1]} ({p[2]}) - {p[3]} units - ${p[4]}" for p in low_stock_products])
+        messagebox.showinfo("Low Stock Alert", low_stock_list)
+
+# Initialize the database
+setup_database()
+
+# Sample operations for demonstration
+print("Registering users:")
+register_user('user1', 'pass1')
+register_user('user2', 'pass2')
+
+print("\nAuthenticating users:")
+authenticate_user('user1', 'pass1')
+authenticate_user('user2', 'wrongpass')
+
+print("\nAdding products:")
+add_product('Laptop', 'Electronics', 20, 999.99)
+add_product('Smartphone', 'Electronics', 50, 499.99)
+add_product('Headphones', 'Accessories', 5, 29.99)
+
+print("\nViewing products:")
+for product in view_products():
+    print(product)
+
+print("\nLow stock alert:")
+for product in low_stock_alert():
+    print(product)
+
+# Run the GUI application
+root = tk.Tk()
+app = InventoryApp(root)
+root.mainloop()
